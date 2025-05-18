@@ -69,13 +69,13 @@ export default class Registration extends Component {
         const voterAddress = await instance.methods.voters(i).call();
         const voter = await instance.methods.voterDetails(voterAddress).call();
         voters.push({
-          address: voter.voterAddress,
-          name: voter.name,
-          phone: voter.phone,
-          hasVoted: voter.hasVoted,
-          isVerified: voter.isVerified,
-          isRegistered: voter.isRegistered,
-        });
+  address: voterAddress,
+  name: voter.name,
+  phone: voter.phone,
+  hasVoted: voter.hasVoted,
+  isVerified: voter.isVerified,
+  isRegistered: voter.isRegistered,
+});
       }
       this.setState({ voters: voters });
 
