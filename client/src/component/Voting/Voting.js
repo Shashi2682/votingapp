@@ -67,7 +67,7 @@ export default class Voting extends Component {
 
       // Get total number of candidates
       const candidateCount = await this.state.ElectionInstance.methods
-        .getTotalCandidate()
+        .getTotalCandidates()
         .call();
       this.setState({ candidateCount: candidateCount });
 
