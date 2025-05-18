@@ -49,6 +49,27 @@ export default class Result extends Component {
         deployedNetwork && deployedNetwork.address
       );
 
+      // Listen to ElectionEnded event and save results to localStorage
+      instance.events
+        .ElectionEnded({})
+        .on("data", (event) => {
+          const { electionTitle, candidateAddrs, voteCounts, winner } = event.returnValues;
+
+          const result = candidateAddrs.map((addr, i) => ({
+            id: i,
+            address: addr,
+            header: "Candidate " + (i + 1), // You can customize this if you have names stored elsewhere
+            slogan: "N/A",                  // Same here
+            voteCount: voteCounts[i],
+          }));
+
+          localStorage.setItem("electionResults", JSON.stringify(result));
+          localStorage.setItem("electionWinner", winner);
+        })
+        .on("error", (error) => {
+          console.error("Error in ElectionEnded event:", error);
+        });
+
       // Set web3, accounts, and contract to the state
       this.setState({ web3, ElectionInstance: instance, account: accounts[0] });
 
@@ -63,19 +84,28 @@ export default class Result extends Component {
       this.setState({ isElEnded: end });
 
       // Load candidates details
-      const candidates = [];
-      for (let i = 0; i < candidateCount; i++) {
-        const candidate = await instance.methods.candidateDetails(i).call();
-        candidates.push({
-          id: candidate.candidateId,
-          header: candidate.header,
-          slogan: candidate.slogan,
-          voteCount: candidate.voteCount,
-        });
+      let candidates = [];
+      if (end) {
+        // Election ended, load from localStorage
+        const storedResults = localStorage.getItem("electionResults");
+        if (storedResults) {
+          candidates = JSON.parse(storedResults);
+        }
+      } else {
+        // Election ongoing or not started, load from contract
+        for (let i = 0; i < candidateCount; i++) {
+          const candidate = await instance.methods.candidateDetails(i).call();
+          candidates.push({
+            id: candidate.candidateId,
+            header: candidate.header,
+            slogan: candidate.slogan,
+            voteCount: candidate.voteCount,
+          });
+        }
       }
       this.setState({ candidates });
 
-      // Admin account and verification (Updated to use `admin()` instead of `getAdmin()`)
+      // Admin account and verification
       const admin = await instance.methods.admin().call();
       if (this.state.account.toLowerCase() === admin.toLowerCase()) {
         this.setState({ isAdmin: true });
@@ -131,10 +161,10 @@ function displayWinner(candidates) {
     let maxVoteReceived = 0;
     let winnerCandidate = [];
     for (let i = 0; i < candidates.length; i++) {
-      if (candidates[i].voteCount > maxVoteReceived) {
-        maxVoteReceived = candidates[i].voteCount;
+      if (parseInt(candidates[i].voteCount) > maxVoteReceived) {
+        maxVoteReceived = parseInt(candidates[i].voteCount);
         winnerCandidate = [candidates[i]];
-      } else if (candidates[i].voteCount === maxVoteReceived) {
+      } else if (parseInt(candidates[i].voteCount) === maxVoteReceived) {
         winnerCandidate.push(candidates[i]);
       }
     }
@@ -143,11 +173,12 @@ function displayWinner(candidates) {
 
   const renderWinner = (winner) => {
     return (
-      <div className="container-winner">
+      <div className="container-winner" key={winner.id}>
         <div className="winner-info">
           <p className="winner-tag">Winner!</p>
           <h2>{winner.header}</h2>
           <p className="winner-slogan">{winner.slogan}</p>
+          <p><strong>Address:</strong> {winner.address}</p>
         </div>
         <div className="winner-votes">
           <div className="votes-tag">Total Votes:</div>
@@ -195,9 +226,7 @@ export function displayResults(candidates) {
                     <th>Votes</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {candidates.map(renderResults)}
-                </tbody>
+                <tbody>{candidates.map(renderResults)}</tbody>
               </table>
             </div>
             <div className="container-item" style={{ border: "1px solid black" }}>

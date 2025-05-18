@@ -3,22 +3,15 @@ pragma solidity ^0.8.21;
 
 contract Election {
     address public admin;
-    uint256 public candidateCount;
-    uint256 public voterCount;
     bool public start;
     bool public end;
 
-    // Constructor that sets the predefined admin address
     constructor(address _admin) {
         admin = _admin;
-        candidateCount = 0;
-        voterCount = 0;
-        start = false;
-        end = false;
     }
 
     modifier onlyAdmin() {
-        require(msg.sender == admin, "Only the admin can perform this action.");
+        require(msg.sender == admin, "Only admin can perform this action");
         _;
     }
 
@@ -29,19 +22,10 @@ contract Election {
         uint256 voteCount;
     }
 
-    mapping(uint256 => Candidate) public candidateDetails;
-
-    // Add a candidate
-    function addCandidate(string memory _header, string memory _slogan) public onlyAdmin {
-        require(start == true, "Election not started.");
-        Candidate memory newCandidate = Candidate({
-            candidateId: candidateCount,
-            header: _header,
-            slogan: _slogan,
-            voteCount: 0
-        });
-        candidateDetails[candidateCount] = newCandidate;
-        candidateCount += 1;
+    struct Voter {
+        bool hasVoted;
+        bool isVerified;
+        bool isRegistered;
     }
 
     struct ElectionDetails {
@@ -55,7 +39,22 @@ contract Election {
 
     ElectionDetails public currentElection;
 
-    // Set the election details
+    mapping(uint256 => Candidate) public candidateDetails;
+    uint256 public candidateCount;
+
+    mapping(address => Voter) public voterDetails;
+    address[] public voters;
+
+    /// 🧾 Event to store election result for frontend (off-chain)
+    event ElectionResult(
+        string electionTitle,
+        address[] candidateAddresses,
+        string[] headers,
+        uint256[] voteCounts,
+        uint256 winnerId
+    );
+
+    /// 📌 Set up a new election
     function setElectionDetails(
         string memory _electionTitle,
         string memory _adminName,
@@ -63,7 +62,7 @@ contract Election {
         string memory _adminTitle,
         string memory _organizationTitle
     ) public onlyAdmin {
-        require(!start, "An election is already in progress.");
+        require(!start, "Election already in progress");
         currentElection = ElectionDetails({
             electionTitle: _electionTitle,
             adminName: _adminName,
@@ -76,8 +75,9 @@ contract Election {
         end = false;
     }
 
-    // Get the election details
-    function getElectionDetails() public view returns (string memory, string memory, string memory, string memory, string memory, bool) {
+    function getElectionDetails() public view returns (
+        string memory, string memory, string memory, string memory, string memory, bool
+    ) {
         return (
             currentElection.electionTitle,
             currentElection.adminName,
@@ -88,92 +88,104 @@ contract Election {
         );
     }
 
+    function addCandidate(string memory _header, string memory _slogan) public onlyAdmin {
+        require(start, "Election not started");
+        candidateDetails[candidateCount] = Candidate({
+            candidateId: candidateCount,
+            header: _header,
+            slogan: _slogan,
+            voteCount: 0
+        });
+        candidateCount++;
+    }
+
+    function registerAsVoter(string memory, string memory) public {
+        require(!voterDetails[msg.sender].isRegistered, "Already registered");
+        voterDetails[msg.sender] = Voter({
+            hasVoted: false,
+            isVerified: false,
+            isRegistered: true
+        });
+        voters.push(msg.sender);
+    }
+
+    function verifyVoter(bool _status, address voterAddr) public onlyAdmin {
+        require(voterDetails[voterAddr].isRegistered, "Not registered");
+        voterDetails[voterAddr].isVerified = _status;
+    }
+
+    function vote(uint256 candidateId) public {
+        require(start && !end, "Voting not allowed now");
+        Voter storage voter = voterDetails[msg.sender];
+        require(voter.isVerified, "Not verified");
+        require(!voter.hasVoted, "Already voted");
+        candidateDetails[candidateId].voteCount++;
+        voter.hasVoted = true;
+    }
+
+    function endElection() public onlyAdmin {
+        require(start, "Election not started");
+        end = true;
+        start = false;
+        currentElection.isActive = false;
+
+        address[] memory candidateAddresses = new address[](candidateCount);
+        string[] memory headers = new string[](candidateCount);
+        uint256[] memory votes = new uint256[](candidateCount);
+
+        uint256 winnerId = 0;
+        uint256 maxVotes = 0;
+
+        for (uint256 i = 0; i < candidateCount; i++) {
+            headers[i] = candidateDetails[i].header;
+            votes[i] = candidateDetails[i].voteCount;
+            if (candidateDetails[i].voteCount > maxVotes) {
+                maxVotes = candidateDetails[i].voteCount;
+                winnerId = i;
+            }
+        }
+
+        emit ElectionResult(
+            currentElection.electionTitle,
+            candidateAddresses, // Can be removed or replaced with candidateIds
+            headers,
+            votes,
+            winnerId
+        );
+    }
+
+    function resetElection() public onlyAdmin {
+        require(end, "Election must end first");
+
+        // Delete candidates
+        for (uint256 i = 0; i < candidateCount; i++) {
+            delete candidateDetails[i];
+        }
+        candidateCount = 0;
+
+        // Delete voters
+        for (uint256 i = 0; i < voters.length; i++) {
+            delete voterDetails[voters[i]];
+        }
+        delete voters;
+
+        start = false;
+        end = false;
+        delete currentElection;
+    }
+
     function getTotalCandidates() public view returns (uint256) {
         return candidateCount;
     }
 
     function getTotalVoters() public view returns (uint256) {
-        return voterCount;
+        return voters.length;
     }
 
-    struct Voter {
-        address voterAddress;
-        string name;
-        string phone;
-        bool isVerified;
-        bool hasVoted;
-        bool isRegistered;
-    }
-
-    address[] public voters;
-    mapping(address => Voter) public voterDetails;
-
-    // Register as a voter
-    function registerAsVoter(string memory _name, string memory _phone) public {
-        require(voterDetails[msg.sender].isRegistered == false, "You are already registered.");
-
-        Voter memory newVoter = Voter({
-            voterAddress: msg.sender,
-            name: _name,
-            phone: _phone,
-            hasVoted: false,
-            isVerified: false,
-            isRegistered: true
-        });
-        voterDetails[msg.sender] = newVoter;
-        voters.push(msg.sender);
-        voterCount += 1;
-    }
-
-    // Verify a voter
-    function verifyVoter(bool _verifiedStatus, address voterAddress) public onlyAdmin {
-        voterDetails[voterAddress].isVerified = _verifiedStatus;
-    }
-
-    // Vote for a candidate
-    function vote(uint256 candidateId) public {
-        require(voterDetails[msg.sender].hasVoted == false, "Already voted");
-        require(voterDetails[msg.sender].isVerified == true, "Not verified");
-        require(start == true, "Election not started");
-        require(end == false, "Election ended");
-
-        candidateDetails[candidateId].voteCount += 1;
-        voterDetails[msg.sender].hasVoted = true;
-    }
-
-    // End the election
-    function endElection() public onlyAdmin {
-        require(start == true, "Election not started");
-        end = true;
-        start = false;
-        currentElection.isActive = false;
-    }
-
-    // Reset election for new cycle (only after ending the election and showing results)
-    function resetElection() public onlyAdmin {
-        require(end == true, "Election has not ended yet");
-
-        // Reset vote counts but keep candidates
-        for (uint256 i = 0; i < candidateCount; i++) {
-            candidateDetails[i].voteCount = 0;  // Reset the vote count for candidates
-        }
-
-        // Reset voters' data for new election
-        delete voters;
-        voterCount = 0;
-
-        // Reset election status
-        start = false;
-        end = false;
-        currentElection.isActive = false;
-    }
-
-    // Get if the election has started
     function getStart() public view returns (bool) {
         return start;
     }
 
-    // Get if the election has ended
     function getEnd() public view returns (bool) {
         return end;
     }
