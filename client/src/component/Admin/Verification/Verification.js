@@ -60,7 +60,7 @@ export default class Registration extends Component {
       }
 
       // Total number of voters
-      const voterCount = await instance.methods.getTotalVoter().call();
+      const voterCount = await instance.methods.getTotalVoters().call();
       this.setState({ voterCount: voterCount });
 
       // Loading all the voters
