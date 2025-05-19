@@ -1,13 +1,9 @@
 import React, { Component } from "react";
-
 import Navbar from "../../Navbar/Navigation";
 import NavbarAdmin from "../../Navbar/NavigationAdmin";
-
 import AdminOnly from "../../AdminOnly";
-
 import getWeb3 from "../../../getWeb3";
 import Election from "../../../contracts/Election.sol";
-
 import "./StartEnd.css";
 
 export default class StartEnd extends Component {
@@ -20,6 +16,7 @@ export default class StartEnd extends Component {
       isAdmin: false,
       elStarted: false,
       elEnded: false,
+      electionTitle: "",
     };
   }
 
@@ -32,13 +29,8 @@ export default class StartEnd extends Component {
     }
 
     try {
-      // Get network provider and web3 instance.
       const web3 = await getWeb3();
-
-      // Use web3 to get the user's accounts.
       const accounts = await web3.eth.getAccounts();
-
-      // Get the contract instance.
       const networkId = await web3.eth.net.getId();
       const deployedNetwork = Election.networks[networkId];
       const instance = new web3.eth.Contract(
@@ -46,24 +38,24 @@ export default class StartEnd extends Component {
         deployedNetwork && deployedNetwork.address
       );
 
-      // Set web3, accounts, and contract to the state
       this.setState({
         web3: web3,
         ElectionInstance: instance,
         account: accounts[0],
       });
 
-      // Admin info (assuming function is `admin()`)
+      // Check admin
       const admin = await instance.methods.admin().call();
       if (accounts[0].toLowerCase() === admin.toLowerCase()) {
         this.setState({ isAdmin: true });
       }
 
-      // Get election start and end values (assuming variables are 'started' and 'ended')
-      const started = await instance.methods.started().call();
-      const ended = await instance.methods.ended().call();
+      // Get election details (started and ended status)
+      const started = await instance.methods.getStart().call();
+      const ended = await instance.methods.getEnd().call();
+      const electionTitle = await instance.methods.getElectionDetails().call();
 
-      this.setState({ elStarted: started, elEnded: ended });
+      this.setState({ elStarted: started, elEnded: ended, electionTitle });
     } catch (error) {
       alert(`Failed to load web3, accounts, or contract. Check console for details.`);
       console.error(error);
@@ -72,7 +64,13 @@ export default class StartEnd extends Component {
 
   startElection = async () => {
     await this.state.ElectionInstance.methods
-      .startElection()
+      .setElectionDetails(
+        "Election Title", // Replace with actual dynamic input
+        "Admin Name",
+        "admin@example.com",
+        "Admin Title",
+        "Organization Name"
+      )
       .send({ from: this.state.account, gas: 1000000 });
     window.location.reload();
   };
