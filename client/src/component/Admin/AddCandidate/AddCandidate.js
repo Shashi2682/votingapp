@@ -1,4 +1,4 @@
-import React, { Component } from "react";
+simport React, { Component } from "react";
 import Navbar from "../../Navbar/Navigation";
 import NavbarAdmin from "../../Navbar/NavigationAdmin";
 import getWeb3 from "../../../getWeb3";
@@ -93,7 +93,7 @@ export default class AddCandidate extends Component {
       .send({ from: account, gas: 1000000 });
 
     // Update the state without reloading the page
-    const candidateCount = await ElectionInstance.methods.getTotalCandidate().call(); // Updated method name
+    const candidateCount = await ElectionInstance.methods.getTotalCandidates().call(); // Updated method name
     this.setState({ candidateCount });
 
     let candidates = [];
