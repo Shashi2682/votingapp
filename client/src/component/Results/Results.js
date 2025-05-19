@@ -25,6 +25,7 @@ export default class Result extends Component {
       candidates: [],
       isElStarted: false,
       isElEnded: false,
+      electionTitle: "",
     };
   }
 
@@ -45,7 +46,6 @@ export default class Result extends Component {
         deployedNetwork.address
       );
 
-      // Set web3, account, contract
       this.setState({
         web3,
         ElectionInstance: instance,
@@ -58,30 +58,43 @@ export default class Result extends Component {
         this.setState({ isAdmin: true });
       }
 
-      // Listen to ElectionEnded
+      // Listen to ElectionResult event (use ElectionResult if your contract emits that)
       instance.events
-        .ElectionEnded({})
+        .ElectionResult({})
         .on("data", (event) => {
-          const { electionTitle, candidateAddrs, voteCounts, winner } =
-            event.returnValues;
+          const {
+            electionTitle,
+            candidateAddrs,
+            voteCounts,
+            winnerId,
+          } = event.returnValues;
 
+          // Map candidates and parse votes
           const result = candidateAddrs.map((addr, i) => ({
             id: i,
             address: addr,
             header: `Candidate ${i + 1}`,
-            slogan: "N/A",
-            voteCount: voteCounts[i],
+            slogan: "N/A", // If you have slogans on-chain, fetch them properly
+            voteCount: parseInt(voteCounts[i]),
           }));
 
+          // Save results in localStorage (optional)
           localStorage.setItem("electionResults", JSON.stringify(result));
-          localStorage.setItem("electionWinner", winner);
+          localStorage.setItem("electionWinnerId", winnerId);
+          localStorage.setItem("electionTitle", electionTitle);
+
+          // Update state with new data
+          this.setState({
+            candidates: result,
+            isElEnded: true,
+            electionTitle,
+          });
         })
-        .on("error", (err) => console.error("ElectionEnded Event Error", err));
+        .on("error", (err) => console.error("ElectionResult Event Error", err));
 
       // Check election status
       const isStarted = await instance.methods.getStart().call();
       const isEnded = await instance.methods.getEnd().call();
-
       const candidateCount = await instance.methods.getTotalCandidate().call();
 
       this.setState({
@@ -90,27 +103,28 @@ export default class Result extends Component {
         candidateCount,
       });
 
-      // Load candidates
+      // Load candidates on mount
       let candidates = [];
       if (isEnded) {
+        // Load from localStorage if available
         const storedResults = localStorage.getItem("electionResults");
+        const storedTitle = localStorage.getItem("electionTitle");
         if (storedResults) {
           candidates = JSON.parse(storedResults);
+          this.setState({ electionTitle: storedTitle || "" });
         }
       } else {
         for (let i = 0; i < candidateCount; i++) {
-          const candidate = await instance.methods
-            .candidateDetails(i)
-            .call();
+          const candidate = await instance.methods.candidateDetails(i).call();
           candidates.push({
-            id: candidate.candidateId,
+            id: parseInt(candidate.candidateId),
             header: candidate.header,
             slogan: candidate.slogan,
-            voteCount: candidate.voteCount,
+            voteCount: parseInt(candidate.voteCount),
+            address: candidate.candidateAddress || null,
           });
         }
       }
-
       this.setState({ candidates });
     } catch (error) {
       alert("Failed to load web3 or contract.");
@@ -125,6 +139,7 @@ export default class Result extends Component {
       isElStarted,
       isElEnded,
       candidates,
+      electionTitle,
     } = this.state;
 
     if (!web3) {
@@ -159,7 +174,7 @@ export default class Result extends Component {
               </center>
             </div>
           ) : isElEnded ? (
-            displayResults(candidates)
+            displayResults(candidates, electionTitle)
           ) : null}
         </div>
       </>
@@ -169,10 +184,10 @@ export default class Result extends Component {
 
 // WINNER DISPLAY FUNCTION
 function displayWinner(candidates) {
-  const maxVotes = Math.max(...candidates.map((c) => parseInt(c.voteCount)));
-  const winners = candidates.filter(
-    (c) => parseInt(c.voteCount) === maxVotes
-  );
+  if (candidates.length === 0) return null;
+
+  const maxVotes = Math.max(...candidates.map((c) => c.voteCount));
+  const winners = candidates.filter((c) => c.voteCount === maxVotes);
 
   return (
     <>
@@ -199,14 +214,14 @@ function displayWinner(candidates) {
 }
 
 // RESULTS DISPLAY FUNCTION
-export function displayResults(candidates) {
+export function displayResults(candidates, electionTitle) {
   return (
     <>
-      {candidates.length > 0 && (
-        <div className="container-main">{displayWinner(candidates)}</div>
-      )}
+      <div className="container-main">
+        <h2>{electionTitle || "Election Results"}</h2>
+        {candidates.length > 0 ? displayWinner(candidates) : <p>No candidates found.</p>}
+      </div>
       <div className="container-main" style={{ borderTop: "1px solid" }}>
-        <h2>Results</h2>
         <small>Total candidates: {candidates.length}</small>
         {candidates.length < 1 ? (
           <div className="container-item attention">
@@ -234,10 +249,7 @@ export function displayResults(candidates) {
                 </tbody>
               </table>
             </div>
-            <div
-              className="container-item"
-              style={{ border: "1px solid black" }}
-            >
+            <div className="container-item" style={{ border: "1px solid black" }}>
               <center>That is all.</center>
             </div>
           </>
