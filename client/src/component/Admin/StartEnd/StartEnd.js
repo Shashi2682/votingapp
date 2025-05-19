@@ -21,7 +21,6 @@ export default class StartEnd extends Component {
   }
 
   componentDidMount = async () => {
-    // refreshing page only once
     if (!window.location.hash) {
       window.location = window.location + "#loaded";
       window.location.reload();
@@ -44,34 +43,42 @@ export default class StartEnd extends Component {
         account: accounts[0],
       });
 
-      // Check admin
       const admin = await instance.methods.admin().call();
       if (accounts[0].toLowerCase() === admin.toLowerCase()) {
         this.setState({ isAdmin: true });
       }
 
-      // Get election details (started and ended status)
       const started = await instance.methods.getStart().call();
       const ended = await instance.methods.getEnd().call();
       const electionTitle = await instance.methods.getElectionDetails().call();
 
       this.setState({ elStarted: started, elEnded: ended, electionTitle });
     } catch (error) {
-      alert(`Failed to load web3, accounts, or contract. Check console for details.`);
+      alert("Failed to load web3, accounts, or contract.");
       console.error(error);
     }
   };
 
   startElection = async () => {
-    await this.state.ElectionInstance.methods
+    const { ElectionInstance, account, elEnded } = this.state;
+
+    if (elEnded) {
+      // Automatically reset election if previously ended
+      await ElectionInstance.methods
+        .resetElection()
+        .send({ from: account, gas: 1000000 });
+    }
+
+    await ElectionInstance.methods
       .setElectionDetails(
-        "Election Title", // Replace with actual dynamic input
+        "Election Title",      // Replace with actual dynamic inputs as needed
         "Admin Name",
         "admin@example.com",
         "Admin Title",
         "Organization Name"
       )
-      .send({ from: this.state.account, gas: 1000000 });
+      .send({ from: account, gas: 1000000 });
+
     window.location.reload();
   };
 
@@ -79,19 +86,28 @@ export default class StartEnd extends Component {
     await this.state.ElectionInstance.methods
       .endElection()
       .send({ from: this.state.account, gas: 1000000 });
+
     window.location.reload();
   };
 
   render() {
-    if (!this.state.web3) {
+    const {
+      web3,
+      isAdmin,
+      elStarted,
+      elEnded
+    } = this.state;
+
+    if (!web3) {
       return (
         <>
-          {this.state.isAdmin ? <NavbarAdmin /> : <Navbar />}
+          {isAdmin ? <NavbarAdmin /> : <Navbar />}
           <center>Loading Web3, accounts, and contract...</center>
         </>
       );
     }
-    if (!this.state.isAdmin) {
+
+    if (!isAdmin) {
       return (
         <>
           <Navbar />
@@ -99,30 +115,33 @@ export default class StartEnd extends Component {
         </>
       );
     }
+
     return (
       <>
         <NavbarAdmin />
-        {!this.state.elStarted && !this.state.elEnded ? (
+        {!elStarted && !elEnded && (
           <div className="container-item info">
             <center>The election has never been initiated.</center>
           </div>
-        ) : null}
+        )}
+
         <div className="container-main">
           <h3>Start or end election</h3>
-          {!this.state.elStarted ? (
+
+          {!elStarted ? (
             <>
               <div className="container-item">
                 <button onClick={this.startElection} className="start-btn">
-                  Start {this.state.elEnded ? "Again" : null}
+                  Start {elEnded ? "Again" : ""}
                 </button>
               </div>
-              {this.state.elEnded ? (
+              {elEnded && (
                 <div className="container-item">
                   <center>
                     <p>The election ended.</p>
                   </center>
                 </div>
-              ) : null}
+              )}
             </>
           ) : (
             <>
@@ -138,9 +157,10 @@ export default class StartEnd extends Component {
               </div>
             </>
           )}
+
           <div className="election-status">
-            <p>Started: {this.state.elStarted ? "True" : "False"}</p>
-            <p>Ended: {this.state.elEnded ? "True" : "False"}</p>
+            <p>Started: {elStarted ? "True" : "False"}</p>
+            <p>Ended: {elEnded ? "True" : "False"}</p>
           </div>
         </div>
       </>
