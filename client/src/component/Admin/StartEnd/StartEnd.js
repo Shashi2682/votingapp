@@ -16,7 +16,7 @@ export default class StartEnd extends Component {
     this.state = {
       ElectionInstance: undefined,
       web3: null,
-      accounts: null,
+      account: null,
       isAdmin: false,
       elStarted: false,
       elEnded: false,
@@ -28,6 +28,7 @@ export default class StartEnd extends Component {
     if (!window.location.hash) {
       window.location = window.location + "#loaded";
       window.location.reload();
+      return;
     }
 
     try {
@@ -44,30 +45,27 @@ export default class StartEnd extends Component {
         Election.abi,
         deployedNetwork && deployedNetwork.address
       );
-      // Set web3, accounts, and contract to the state, and then proceed with an
-      // example of interacting with the contract's methods.
+
+      // Set web3, accounts, and contract to the state
       this.setState({
         web3: web3,
         ElectionInstance: instance,
         account: accounts[0],
       });
 
-      // Admin info
-      const admin = await this.state.ElectionInstance.methods.getAdmin().call();
-      if (this.state.account === admin) {
+      // Admin info (assuming function is `admin()`)
+      const admin = await instance.methods.admin().call();
+      if (accounts[0].toLowerCase() === admin.toLowerCase()) {
         this.setState({ isAdmin: true });
       }
 
-      // Get election start and end values
-      const start = await this.state.ElectionInstance.methods.getStart().call();
-      this.setState({ elStarted: start });
-      const end = await this.state.ElectionInstance.methods.getEnd().call();
-      this.setState({ elEnded: end });
+      // Get election start and end values (assuming variables are 'started' and 'ended')
+      const started = await instance.methods.started().call();
+      const ended = await instance.methods.ended().call();
+
+      this.setState({ elStarted: started, elEnded: ended });
     } catch (error) {
-      // Catch any errors for any of the above operations.
-      alert(
-        `Failed to load web3, accounts, or contract. Check console for details.`
-      );
+      alert(`Failed to load web3, accounts, or contract. Check console for details.`);
       console.error(error);
     }
   };
@@ -78,6 +76,7 @@ export default class StartEnd extends Component {
       .send({ from: this.state.account, gas: 1000000 });
     window.location.reload();
   };
+
   endElection = async () => {
     await this.state.ElectionInstance.methods
       .endElection()
@@ -105,9 +104,9 @@ export default class StartEnd extends Component {
     return (
       <>
         <NavbarAdmin />
-        {!this.state.elStarted & !this.state.elEnded ? (
+        {!this.state.elStarted && !this.state.elEnded ? (
           <div className="container-item info">
-            <center>The election have never been initiated.</center>
+            <center>The election has never been initiated.</center>
           </div>
         ) : null}
         <div className="container-main">
