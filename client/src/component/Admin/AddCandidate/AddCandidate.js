@@ -18,7 +18,6 @@ export default class AddCandidate extends Component {
       slogan: "",
       candidates: [],
       candidateCount: 0,
-      account: null,
     };
   }
 
@@ -30,9 +29,11 @@ export default class AddCandidate extends Component {
     }
 
     try {
+      // Get network provider and web3 instance
       const web3 = await getWeb3();
       const accounts = await web3.eth.getAccounts();
 
+      // Get the contract instance
       const networkId = await web3.eth.net.getId();
       const deployedNetwork = Election.networks[networkId];
       const instance = new web3.eth.Contract(
@@ -40,25 +41,29 @@ export default class AddCandidate extends Component {
         deployedNetwork && deployedNetwork.address
       );
 
+      // Set web3, accounts, and contract to state, and then interact with the contract
       this.setState({
-        web3,
+        web3: web3,
         ElectionInstance: instance,
         account: accounts[0],
       });
 
-      const adminAddress = "0xEF3F529f5b7474c167336c14f211329174c0Ea04"; // Replace with actual admin address
+      // Hardcode the admin address here
+      const adminAddress = "0xEF3F529f5b7474c167336c14f211329174c0Ea04";  // Replace with the actual admin address
 
-      if (accounts[0].toLowerCase() === adminAddress.toLowerCase()) {
+      // Check if the current account is the admin
+      if (this.state.account.toLowerCase() === adminAddress.toLowerCase()) {
         this.setState({ isAdmin: true });
       }
 
-      // Corrected function name here:
-      const candidateCount = await instance.methods.getTotalCandidates().call();
-      this.setState({ candidateCount });
+      // Fetch total candidates and their details
+      const candidateCount = await instance.methods.getTotalCandidate().call(); // Updated method name
+      this.setState({ candidateCount: candidateCount });
 
       let candidates = [];
       for (let i = 0; i < candidateCount; i++) {
         const candidate = await instance.methods.candidateDetails(i).call();
+        console.log("Fetched candidate:", candidate);  // Debugging
         candidates.push({
           id: candidate.candidateId,
           header: candidate.header,
@@ -66,6 +71,7 @@ export default class AddCandidate extends Component {
         });
       }
       this.setState({ candidates });
+
     } catch (error) {
       console.error(error);
       alert("Failed to load web3, accounts, or contract. Check console for details.");
@@ -80,18 +86,14 @@ export default class AddCandidate extends Component {
     this.setState({ slogan: event.target.value });
   };
 
-  addCandidate = async (event) => {
-    event.preventDefault();  // Prevent form submit reload
+  addCandidate = async () => {
     const { header, slogan, account, ElectionInstance } = this.state;
-
-    if (!ElectionInstance) return;
-
     await ElectionInstance.methods
       .addCandidate(header, slogan)
       .send({ from: account, gas: 1000000 });
 
-    // Refresh candidate list after adding new one
-    const candidateCount = await ElectionInstance.methods.getTotalCandidates().call();
+    // Update the state without reloading the page
+    const candidateCount = await ElectionInstance.methods.getTotalCandidate().call(); // Updated method name
     this.setState({ candidateCount });
 
     let candidates = [];
@@ -103,7 +105,7 @@ export default class AddCandidate extends Component {
         slogan: candidate.slogan,
       });
     }
-    this.setState({ candidates, header: "", slogan: "" }); // Clear inputs after adding
+    this.setState({ candidates });
   };
 
   render() {
@@ -132,7 +134,7 @@ export default class AddCandidate extends Component {
           <h2>Add a new candidate</h2>
           <small>Total candidates: {this.state.candidateCount}</small>
           <div className="container-item">
-            <form className="form" onSubmit={this.addCandidate}>
+            <form className="form">
               <label className={"label-ac"}>
                 Header
                 <input
@@ -156,7 +158,7 @@ export default class AddCandidate extends Component {
               <button
                 className="btn-add"
                 disabled={this.state.header.length < 3 || this.state.header.length > 21}
-                type="submit"
+                onClick={this.addCandidate}
               >
                 Add
               </button>
