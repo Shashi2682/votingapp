@@ -58,6 +58,35 @@ export default class Result extends Component {
         this.setState({ isAdmin: true });
       }
 
+      // Check election status (started and ended)
+      const isStarted = await instance.methods.getStart().call();
+      const isEnded = await instance.methods.getEnd().call();
+      const electionDetails = await instance.methods.getElectionDetails().call();
+      const candidateCount = await instance.methods.getTotalCandidates().call();
+
+      // Set state
+      this.setState({
+        isElStarted: isStarted,
+        isElEnded: isEnded,
+        electionTitle: electionDetails.electionTitle,
+        candidateCount,
+      });
+
+      // Fetch candidates if election has ended
+      if (isEnded) {
+        let candidates = [];
+        for (let i = 0; i < candidateCount; i++) {
+          const candidate = await instance.methods.candidateDetails(i).call();
+          candidates.push({
+            id: candidate.candidateId,
+            header: candidate.header,
+            slogan: candidate.slogan,
+            voteCount: parseInt(candidate.voteCount),
+          });
+        }
+        this.setState({ candidates });
+      }
+
       // Listen to ElectionResult event
       instance.events
         .ElectionResult({})
@@ -75,16 +104,11 @@ export default class Result extends Component {
             id: i,
             address: addr,
             header: headers && headers[i] ? headers[i] : `Candidate ${i + 1}`,
-            slogan: "N/A", // If you have slogans on-chain, fetch them properly
+            slogan: "N/A", // Fetch slogan from the contract if available
             voteCount: parseInt(voteCounts[i]),
           }));
 
-          // Save results in localStorage (optional)
-          localStorage.setItem("electionResults", JSON.stringify(result));
-          localStorage.setItem("electionWinnerId", winnerId);
-          localStorage.setItem("electionTitle", electionTitle);
-
-          // Update state with new data
+          // Update state with results
           this.setState({
             candidates: result,
             isElEnded: true,
@@ -93,40 +117,6 @@ export default class Result extends Component {
         })
         .on("error", (err) => console.error("ElectionResult Event Error", err));
 
-      // Check election status
-      const isStarted = await instance.methods.getStart().call();
-      const isEnded = await instance.methods.getEnd().call();
-      const candidateCount = await instance.methods.getTotalCandidate().call();
-
-      this.setState({
-        isElStarted: isStarted,
-        isElEnded: isEnded,
-        candidateCount,
-      });
-
-      // Load candidates on mount
-      let candidates = [];
-      if (isEnded) {
-        // Load from localStorage if available
-        const storedResults = localStorage.getItem("electionResults");
-        const storedTitle = localStorage.getItem("electionTitle");
-        if (storedResults) {
-          candidates = JSON.parse(storedResults);
-          this.setState({ electionTitle: storedTitle || "" });
-        }
-      } else {
-        for (let i = 0; i < candidateCount; i++) {
-          const candidate = await instance.methods.candidateDetails(i).call();
-          candidates.push({
-            id: parseInt(candidate.candidateId),
-            header: candidate.header,
-            slogan: candidate.slogan,
-            voteCount: parseInt(candidate.voteCount),
-            address: candidate.candidateAddress || null,
-          });
-        }
-      }
-      this.setState({ candidates });
     } catch (error) {
       alert("Failed to load web3 or contract.");
       console.error(error);
@@ -254,10 +244,7 @@ export function displayResults(candidates, electionTitle) {
                 </tbody>
               </table>
             </div>
-            <div
-              className="container-item"
-              style={{ border: "1px solid black" }}
-            >
+            <div className="container-item" style={{ border: "1px solid black" }}>
               <center>That is all.</center>
             </div>
           </>
