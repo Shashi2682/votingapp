@@ -57,7 +57,7 @@ export default class AddCandidate extends Component {
       }
 
       // Fetch total candidates and their details
-      const candidateCount = await instance.methods.getTotalCandidate().call(); // Updated method name
+      const candidateCount = await instance.methods.getTotalCandidates().call(); // Updated method name
       this.setState({ candidateCount: candidateCount });
 
       let candidates = [];
