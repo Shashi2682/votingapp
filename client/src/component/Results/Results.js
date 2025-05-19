@@ -58,22 +58,23 @@ export default class Result extends Component {
         this.setState({ isAdmin: true });
       }
 
-      // Listen to ElectionResult event (use ElectionResult if your contract emits that)
+      // Listen to ElectionResult event
       instance.events
         .ElectionResult({})
         .on("data", (event) => {
           const {
             electionTitle,
-            candidateAddrs,
+            candidateAddresses,
+            headers,
             voteCounts,
             winnerId,
           } = event.returnValues;
 
           // Map candidates and parse votes
-          const result = candidateAddrs.map((addr, i) => ({
+          const result = candidateAddresses.map((addr, i) => ({
             id: i,
             address: addr,
-            header: `Candidate ${i + 1}`,
+            header: headers && headers[i] ? headers[i] : `Candidate ${i + 1}`,
             slogan: "N/A", // If you have slogans on-chain, fetch them properly
             voteCount: parseInt(voteCounts[i]),
           }));
@@ -219,7 +220,11 @@ export function displayResults(candidates, electionTitle) {
     <>
       <div className="container-main">
         <h2>{electionTitle || "Election Results"}</h2>
-        {candidates.length > 0 ? displayWinner(candidates) : <p>No candidates found.</p>}
+        {candidates.length > 0 ? (
+          displayWinner(candidates)
+        ) : (
+          <p>No candidates found.</p>
+        )}
       </div>
       <div className="container-main" style={{ borderTop: "1px solid" }}>
         <small>Total candidates: {candidates.length}</small>
@@ -249,7 +254,10 @@ export function displayResults(candidates, electionTitle) {
                 </tbody>
               </table>
             </div>
-            <div className="container-item" style={{ border: "1px solid black" }}>
+            <div
+              className="container-item"
+              style={{ border: "1px solid black" }}
+            >
               <center>That is all.</center>
             </div>
           </>
